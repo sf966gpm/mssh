@@ -11,6 +11,7 @@ import (
 )
 
 type Field struct {
+	Path  string
 	Name  string
 	Value string
 	Line  int
@@ -24,12 +25,14 @@ func (f Field) DisplayValue() string {
 }
 
 type HostBlock struct {
+	Path     string
 	Patterns []string
 	Line     int
 	Fields   []Field
 }
 
 type Include struct {
+	Path    string
 	Pattern string
 	Line    int
 }
@@ -63,19 +66,32 @@ func ConfigPath() (string, error) {
 }
 
 func ParseFile(path string) (*Config, error) {
+	config, _, err := parseFileWithEntries(path)
+	return config, err
+}
+
+type parsedEntry struct {
+	host          *HostBlock
+	include       *Include
+	expandInclude bool
+}
+
+func parseFileWithEntries(path string) (*Config, []parsedEntry, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("SSH config does not exist: %s", path)
+			return nil, nil, fmt.Errorf("SSH config does not exist: %s", path)
 		}
-		return nil, fmt.Errorf("cannot read SSH config %s: %w", path, err)
+		return nil, nil, fmt.Errorf("cannot read SSH config %s: %w", path, err)
 	}
 	defer file.Close()
 
 	config := &Config{Path: path}
+	entries := make([]parsedEntry, 0)
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	var current *HostBlock
+	inMatch := false
 	for scanner.Scan() {
 		lineNumber++
 		line := strings.TrimSpace(stripComment(scanner.Text()))
@@ -98,17 +114,27 @@ func ParseFile(path string) (*Config, error) {
 				current = nil
 				continue
 			}
-			config.Hosts = append(config.Hosts, HostBlock{Patterns: patterns, Line: lineNumber})
+			config.Hosts = append(config.Hosts, HostBlock{Path: path, Patterns: patterns, Line: lineNumber})
 			current = &config.Hosts[len(config.Hosts)-1]
+			inMatch = false
+			entries = append(entries, parsedEntry{host: current})
 		case "include":
 			if strings.TrimSpace(value) == "" {
 				config.addDiagnostic(lineNumber, "Include requires a path or pattern")
 				continue
 			}
-			config.Includes = append(config.Includes, Include{Pattern: strings.TrimSpace(value), Line: lineNumber})
+			include := Include{Path: path, Pattern: strings.TrimSpace(value), Line: lineNumber}
+			config.Includes = append(config.Includes, include)
+			if inMatch {
+				config.addDiagnostic(lineNumber, "conditional Include is unsupported and was not expanded")
+				entries = append(entries, parsedEntry{include: &config.Includes[len(config.Includes)-1]})
+				continue
+			}
+			entries = append(entries, parsedEntry{include: &config.Includes[len(config.Includes)-1], expandInclude: true})
 		case "match":
 			config.addDiagnostic(lineNumber, "unsupported directive Match; following fields are not attributed to a Host block")
 			current = nil
+			inMatch = true
 		default:
 			if !supportedFields[lowerName] {
 				config.addDiagnostic(lineNumber, fmt.Sprintf("unsupported directive %q", name))
@@ -122,13 +148,13 @@ func ParseFile(path string) (*Config, error) {
 				config.addDiagnostic(lineNumber, fmt.Sprintf("directive %s is outside a supported Host block", name))
 				continue
 			}
-			current.Fields = append(current.Fields, Field{Name: name, Value: value, Line: lineNumber})
+			current.Fields = append(current.Fields, Field{Path: path, Name: name, Value: value, Line: lineNumber})
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("cannot read SSH config %s: %w", path, err)
+		return nil, nil, fmt.Errorf("cannot read SSH config %s: %w", path, err)
 	}
-	return config, nil
+	return config, entries, nil
 }
 
 func (c *Config) addDiagnostic(line int, message string) {

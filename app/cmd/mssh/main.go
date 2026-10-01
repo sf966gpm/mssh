@@ -14,7 +14,7 @@ func main() {
 		fail(err)
 	}
 
-	config, err := sshconfig.ParseFile(path)
+	config, err := sshconfig.ParseFileExpanded(path)
 	if err != nil {
 		fail(err)
 	}
@@ -33,13 +33,13 @@ func fail(err error) {
 func printConfig(config *sshconfig.Config) {
 	fmt.Println("Read:", config.Path)
 	for _, host := range config.Hosts {
-		fmt.Printf("Host: %s (line %d)\n", strings.Join(host.Patterns, " "), host.Line)
+		fmt.Printf("Host: %s (%s:%d)\n", strings.Join(host.Patterns, " "), host.Path, host.Line)
 		for _, field := range host.Fields {
-			fmt.Printf("  %s: %s (line %d)\n", field.Name, field.DisplayValue(), field.Line)
+			fmt.Printf("  %s: %s (%s:%d)\n", field.Name, field.DisplayValue(), field.Path, field.Line)
 		}
 	}
 	for _, include := range config.Includes {
-		fmt.Printf("Include (unresolved, line %d): %s\n", include.Line, include.Pattern)
+		fmt.Printf("Include (%s:%d): %s\n", include.Path, include.Line, include.Pattern)
 	}
 	for _, diagnostic := range config.Diagnostics {
 		fmt.Printf("Diagnostic: %s:%d: %s\n", diagnostic.File, diagnostic.Line, diagnostic.Message)

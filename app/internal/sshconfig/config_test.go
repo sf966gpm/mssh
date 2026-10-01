@@ -94,3 +94,97 @@ func TestParseEmptyFile(t *testing.T) {
 		t.Fatalf("got hosts=%d diagnostics=%d, want both zero", len(config.Hosts), len(config.Diagnostics))
 	}
 }
+
+func TestParseFileExpandedResolvesNestedIncludesInOrder(t *testing.T) {
+	dir := t.TempDir()
+	nestedDir := filepath.Join(dir, "nested")
+	if err := os.Mkdir(nestedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, "config")
+	child := filepath.Join(dir, "child.conf")
+	nested := filepath.Join(nestedDir, "one.conf")
+	writeConfig(t, root, "Host root\nInclude child.conf\nHost after\n")
+	writeConfig(t, child, "Host child\nInclude nested/*.conf\n")
+	writeConfig(t, nested, "Host nested\n")
+
+	config, err := ParseFileExpanded(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hostPatterns(config); !strings.EqualFold(got, "root child nested after") {
+		t.Errorf("got hosts %q, want %q", got, "root child nested after")
+	}
+	if len(config.Includes) != 2 {
+		t.Fatalf("got %d includes, want 2", len(config.Includes))
+	}
+	if config.Hosts[1].Path != child || config.Hosts[2].Path != nested {
+		t.Errorf("got host sources %q and %q, want %q and %q", config.Hosts[1].Path, config.Hosts[2].Path, child, nested)
+	}
+	if len(config.Diagnostics) != 0 {
+		t.Errorf("got diagnostics %#v, want none", config.Diagnostics)
+	}
+}
+
+func TestParseFileExpandedReportsMissingInclude(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "config")
+	writeConfig(t, root, "Host root\nInclude missing.conf\n")
+
+	config, err := ParseFileExpanded(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Diagnostics) != 1 || !strings.Contains(config.Diagnostics[0].Message, "matched no files") {
+		t.Fatalf("got diagnostics %#v, want missing include diagnostic", config.Diagnostics)
+	}
+}
+
+func TestParseFileExpandedDetectsIncludeCycle(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.conf")
+	b := filepath.Join(dir, "b.conf")
+	writeConfig(t, a, "Host a\nInclude b.conf\n")
+	writeConfig(t, b, "Host b\nInclude a.conf\n")
+
+	config, err := ParseFileExpanded(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hostPatterns(config); got != "a b" {
+		t.Errorf("got hosts %q, want %q", got, "a b")
+	}
+	if len(config.Diagnostics) != 1 || !strings.Contains(config.Diagnostics[0].Message, "cycle") {
+		t.Fatalf("got diagnostics %#v, want cycle diagnostic", config.Diagnostics)
+	}
+}
+
+func TestParseFileExpandedDoesNotResolveConditionalInclude(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "config")
+	writeConfig(t, root, "Match host *.example.org\nInclude missing.conf\nHost plain\n")
+
+	config, err := ParseFileExpanded(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Includes) != 1 {
+		t.Fatalf("got %d includes, want 1", len(config.Includes))
+	}
+	if len(config.Diagnostics) != 2 || !strings.Contains(config.Diagnostics[1].Message, "conditional Include") {
+		t.Fatalf("got diagnostics %#v, want Match and conditional Include diagnostics", config.Diagnostics)
+	}
+}
+
+func writeConfig(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func hostPatterns(config *Config) string {
+	patterns := make([]string, 0, len(config.Hosts))
+	for _, host := range config.Hosts {
+		patterns = append(patterns, strings.Join(host.Patterns, " "))
+	}
+	return strings.Join(patterns, " ")
+}
