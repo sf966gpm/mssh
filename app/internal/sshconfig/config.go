@@ -51,10 +51,11 @@ type Config struct {
 }
 
 var supportedFields = map[string]bool{
-	"hostname":     true,
-	"user":         true,
-	"port":         true,
-	"identityfile": true,
+	"hostname":                 true,
+	"user":                     true,
+	"port":                     true,
+	"identityfile":             true,
+	"preferredauthentications": true,
 }
 
 func ConfigPath() (string, error) {

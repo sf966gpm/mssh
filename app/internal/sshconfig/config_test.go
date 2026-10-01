@@ -17,6 +17,7 @@ Host home work
     Port 22
     IdentityFile ~/.ssh/home/id_ed25519
     IdentityFile ~/.ssh/home/id_rsa
+    PreferredAuthentications publickey
 
 Host *.example.org !banned.example.org
     User deploy
@@ -40,8 +41,8 @@ Include ~/.ssh/work/config.conf
 	if got := config.Hosts[0].Fields[0].DisplayValue(); got != "192.168.1.10" {
 		t.Errorf("got displayed HostName %q, want %q", got, "192.168.1.10")
 	}
-	if got := len(config.Hosts[0].Fields); got != 5 {
-		t.Errorf("got %d fields, want 5 including repeated IdentityFile", got)
+	if got := len(config.Hosts[0].Fields); got != 6 {
+		t.Errorf("got %d fields, want 6 including repeated IdentityFile and PreferredAuthentications", got)
 	}
 	if len(config.Includes) != 1 || config.Includes[0].Pattern != "~/.ssh/work/config.conf" {
 		t.Errorf("got includes %#v", config.Includes)
