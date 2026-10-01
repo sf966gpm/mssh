@@ -4,3 +4,5 @@
 .local/
 docs/
 AGENTS.md
+app/bin/
+app/mssh
