@@ -1,2 +1,6 @@
 .idea/
+.vscode/
 .env
+.local/
+docs/
+AGENTS.md
