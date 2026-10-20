@@ -3,7 +3,6 @@
 .env
 .local/
 .agents/
-docs/
 AGENTS.md
 app/bin/
 app/mssh

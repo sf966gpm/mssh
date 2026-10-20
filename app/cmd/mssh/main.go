@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	application := app.New()
+	application := app.NewWithID("io.github.sf966gpm.mssh")
 	window := ui.NewWindow(application)
 	window.ShowAndRun()
 }
