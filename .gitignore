@@ -2,6 +2,7 @@
 .vscode/
 .env
 .local/
+.agents/
 docs/
 AGENTS.md
 app/bin/
