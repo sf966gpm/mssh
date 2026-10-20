@@ -6,3 +6,5 @@
 AGENTS.md
 app/bin/
 app/mssh
+app/fyne-cross/
+docs/
