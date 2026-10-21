@@ -4,6 +4,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/sf966gpm/mssh/app/internal/ui/theme"
 )
@@ -16,20 +17,14 @@ func NewWindow(application fyne.App) fyne.Window {
 	}
 	application.Settings().SetTheme(theme.NewForMode(mode))
 
-	explorer := newExplorer(application, window, mode)
-	window.SetContent(explorer.content())
+	shell := newAppShell(application, window, mode)
+	window.SetContent(shell.content())
 	window.Resize(fyne.NewSize(1200, 800))
 	return window
 }
 
-func (e *explorer) content() fyne.CanvasObject {
-	leftPane := container.NewBorder(e.pathLabel, nil, nil, nil, e.fileList)
-	fileActions := container.NewHBox(e.editButton, e.saveButton, e.cancelButton)
-	rightHeader := container.NewBorder(nil, nil, nil, fileActions, e.fileLabel)
-	rightPane := container.NewBorder(rightHeader, nil, nil, nil, e.fileBody)
-	split := container.NewHSplit(leftPane, rightPane)
-	split.SetOffset(0.2)
-	header := container.NewHBox(e.settings, layout.NewSpacer())
-	main := container.NewBorder(header, e.statusLabel, nil, nil, split)
-	return main
+func (e *appShell) content() fyne.CanvasObject {
+	settingsBar := container.NewHBox(e.settings, widget.NewLabel("MSSH"), layout.NewSpacer())
+	overview := newOverview(e.window, e.rootDir, e.statusLabel.SetText)
+	return container.NewBorder(settingsBar, e.statusLabel, nil, nil, overview.aliasContent())
 }

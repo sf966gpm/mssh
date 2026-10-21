@@ -1,4 +1,4 @@
-package ui
+package sshconfig
 
 import (
 	"context"
@@ -93,25 +93,24 @@ type configToken struct {
 }
 
 func prepareSSHConfigForValidation(path, content string) (string, error) {
-	home, err := os.UserHomeDir()
+	home, localUser, localHost, err := sshIncludeExpansionContext()
 	if err != nil {
-		return "", fmt.Errorf("не удалось определить домашнюю папку: %w", err)
-	}
-	currentUser, err := user.Current()
-	if err != nil {
-		return "", fmt.Errorf("не удалось определить пользователя: %w", err)
-	}
-	localHost, err := os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("не удалось определить имя компьютера: %w", err)
+		return "", err
 	}
 	path, err = filepath.EvalSymlinks(path)
 	if err != nil {
-		return "", fmt.Errorf("не удалось разрешить путь конфига: %w", err)
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("не удалось разрешить путь конфига: %w", err)
+		}
+		parent, parentErr := filepath.EvalSymlinks(filepath.Dir(path))
+		if parentErr != nil {
+			return "", fmt.Errorf("не удалось разрешить папку SSH config: %w", parentErr)
+		}
+		path = filepath.Join(parent, filepath.Base(path))
 	}
 	activeIncludes := map[string]struct{}{path: {}}
 	includeRoot := filepath.Join(home, ".ssh")
-	content, totalSize, err := expandSSHConfigIncludes(content, includeRoot, home, currentUser.Username, localHost, activeIncludes, 0, len(content))
+	content, totalSize, err := expandSSHConfigIncludes(content, includeRoot, home, localUser, localHost, activeIncludes, 0, len(content))
 	if err != nil {
 		return "", err
 	}
@@ -124,6 +123,22 @@ func prepareSSHConfigForValidation(path, content string) (string, error) {
 	return sanitizeMatchExec(content), nil
 }
 
+func sshIncludeExpansionContext() (string, string, string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", "", fmt.Errorf("не удалось определить домашнюю папку: %w", err)
+	}
+	currentUser, err := user.Current()
+	if err != nil {
+		return "", "", "", fmt.Errorf("не удалось определить пользователя: %w", err)
+	}
+	localHost, err := os.Hostname()
+	if err != nil {
+		return "", "", "", fmt.Errorf("не удалось определить имя компьютера: %w", err)
+	}
+	return home, currentUser.Username, localHost, nil
+}
+
 func expandSSHConfigIncludes(content, includeRoot, home, localUser, localHost string, active map[string]struct{}, depth, totalSize int) (string, int, error) {
 	if depth > maxIncludeDepth {
 		return "", totalSize, fmt.Errorf("превышена максимальная глубина Include (%d)", maxIncludeDepth)
@@ -133,13 +148,14 @@ func expandSSHConfigIncludes(content, includeRoot, home, localUser, localHost st
 	for _, line := range lines {
 		body := strings.TrimSuffix(line, "\n")
 		tokens := sshConfigTokens(body)
-		if len(tokens) == 0 || !strings.EqualFold(tokens[0].value, "Include") || len(tokens) == 1 {
+		directive, arguments := configDirectiveArgs(tokens)
+		if directive != "include" || len(arguments) == 0 {
 			expanded.WriteString(line)
 			continue
 		}
 
-		for _, token := range tokens[1:] {
-			includePattern, err := expandSSHIncludePattern(token.value, home, localUser, localHost)
+		for _, argument := range arguments {
+			includePattern, err := expandSSHIncludePattern(argument.value, home, localUser, localHost)
 			if err != nil {
 				return "", totalSize, err
 			}
@@ -148,7 +164,7 @@ func expandSSHConfigIncludes(content, includeRoot, home, localUser, localHost st
 			}
 			matches, err := filepath.Glob(includePattern)
 			if err != nil {
-				return "", totalSize, fmt.Errorf("неверный шаблон Include %q: %w", token.value, err)
+				return "", totalSize, fmt.Errorf("неверный шаблон Include %q: %w", argument.value, err)
 			}
 			for _, includePath := range matches {
 				resolvedPath, err := filepath.EvalSymlinks(includePath)
