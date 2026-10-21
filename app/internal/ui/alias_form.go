@@ -57,24 +57,29 @@ func (o *sshOverview) showAlias(configIndex, index int) {
 	}
 	if alias.hostEditable {
 		o.alias.OnChanged = func(value string) {
+			o.validateEntry(o.alias)
 			values.Name = value
 			o.updateAliasEdit(key, original, values)
 		}
 	}
 	if alias.editable {
 		o.hostName.OnChanged = func(value string) {
+			o.validateEntry(o.hostName)
 			values.HostName = value
 			o.updateAliasEdit(key, original, values)
 		}
 		o.user.OnChanged = func(value string) {
+			o.validateEntry(o.user)
 			values.User = value
 			o.updateAliasEdit(key, original, values)
 		}
 		o.port.OnChanged = func(value string) {
+			o.validateEntry(o.port)
 			values.Port = value
 			o.updateAliasEdit(key, original, values)
 		}
 		o.identity.OnChanged = func(value string) {
+			o.validateEntry(o.identity)
 			values.Identity = value
 			o.updateAliasEdit(key, original, values)
 		}
@@ -92,7 +97,7 @@ func (o *sshOverview) showAlias(configIndex, index int) {
 }
 
 func (o *sshOverview) formRow(name string, entry *widget.Entry) fyne.CanvasObject {
-	entryRow := container.NewBorder(nil, nil, nil, nil, entry)
+	entryRow := o.fieldInput(name, entry)
 	return container.NewGridWithColumns(2,
 		widget.NewLabelWithStyle(name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		entryRow,
@@ -152,19 +157,24 @@ func (o *sshOverview) resumeDraft(draftID uint64) {
 	o.identity.SetText(draft.values.Identity)
 	o.alias.Enable()
 	o.alias.OnChanged = func(value string) {
+		o.validateEntry(o.alias)
 		o.updateDraft(draftID, func(values *sshconfig.AliasValues) { values.Name = value })
 		o.rebuildRows()
 	}
 	o.hostName.OnChanged = func(value string) {
+		o.validateEntry(o.hostName)
 		o.updateDraft(draftID, func(values *sshconfig.AliasValues) { values.HostName = value })
 	}
 	o.user.OnChanged = func(value string) {
+		o.validateEntry(o.user)
 		o.updateDraft(draftID, func(values *sshconfig.AliasValues) { values.User = value })
 	}
 	o.port.OnChanged = func(value string) {
+		o.validateEntry(o.port)
 		o.updateDraft(draftID, func(values *sshconfig.AliasValues) { values.Port = value })
 	}
 	o.identity.OnChanged = func(value string) {
+		o.validateEntry(o.identity)
 		o.updateDraft(draftID, func(values *sshconfig.AliasValues) { values.Identity = value })
 	}
 	o.hostName.Enable()
@@ -229,6 +239,12 @@ func (o *sshOverview) clearDraftInputCallbacks() {
 func (o *sshOverview) saveAlias() {
 	if o.activeConfig < 0 || o.activeConfig >= len(o.configs) {
 		return
+	}
+	for _, field := range []*widget.Entry{o.alias, o.hostName, o.user, o.port, o.identity} {
+		if err := o.validateEntry(field); err != nil {
+			o.setStatus(err.Error())
+			return
+		}
 	}
 	configPath := o.configs[o.activeConfig].path
 	wasCreating := o.creating

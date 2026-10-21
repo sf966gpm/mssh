@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type sshProfileValues struct {
@@ -139,27 +140,140 @@ func hostBlockRange(content, alias string) (int, int, bool) {
 	return start, end, true
 }
 
-func validateSSHProfile(values sshProfileValues) error {
-	if values.alias == "" || len(strings.Fields(values.alias)) != 1 || strings.ContainsAny(values.alias, "*!?#\r\n") {
+// ValidateAlias checks the concrete Host name supported by the profile editor.
+func ValidateAlias(value string) error {
+	if value == "" || strings.TrimSpace(value) != value || len(strings.Fields(value)) != 1 || strings.ContainsAny(value, "*!?") || containsControl(value) {
 		return fmt.Errorf("Host должен быть одним конкретным алиасом без пробелов и шаблонов")
 	}
-	for directive, value := range map[string]string{
-		"HostName":     values.hostName,
-		"User":         values.user,
-		"Port":         values.port,
-		"IdentityFile": values.identity,
-	} {
-		if strings.ContainsAny(value, "\r\n\x00") {
-			return fmt.Errorf("%s не может содержать перенос строки", directive)
-		}
+	return nil
+}
+
+// ValidateHostName validates a HostName value and its supported OpenSSH tokens.
+func ValidateHostName(value string) error {
+	if value == "" {
+		return nil
 	}
-	if values.port != "" {
-		port, err := strconv.Atoi(values.port)
-		if err != nil || port < 1 || port > 65535 {
-			return fmt.Errorf("Port должен быть числом от 1 до 65535")
+	if containsWhitespaceOrControl(value) {
+		return fmt.Errorf("HostName должен быть одним именем хоста или IP-адресом")
+	}
+	return validateTokens(value, "%%h", false)
+}
+
+// ValidateUser validates a User value and its supported OpenSSH tokens.
+func ValidateUser(value string) error {
+	if value == "" {
+		return nil
+	}
+	if containsControl(value) {
+		return fmt.Errorf("User не может содержать управляющие символы")
+	}
+	return validateTokens(value, "%%dfHhIijkKLlnpTtu", true)
+}
+
+// ValidatePort accepts an empty value or a TCP port in the valid range.
+func ValidatePort(value string) error {
+	if value == "" {
+		return nil
+	}
+	port, err := strconv.Atoi(value)
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("Port должен быть числом от 1 до 65535")
+	}
+	return nil
+}
+
+// ValidateIdentityFile validates a path and the OpenSSH tokens supported by IdentityFile.
+func ValidateIdentityFile(value string) error {
+	if value == "" || value == "none" {
+		return nil
+	}
+	if containsControl(value) {
+		return fmt.Errorf("IdentityFile не может содержать управляющие символы")
+	}
+	return validateTokens(value, "%%CdhijkLlnpru", false)
+}
+
+func validateSSHProfile(values sshProfileValues) error {
+	validators := []struct {
+		name  string
+		value string
+		check func(string) error
+	}{
+		{name: "Host", value: values.alias, check: ValidateAlias},
+		{name: "HostName", value: values.hostName, check: ValidateHostName},
+		{name: "User", value: values.user, check: ValidateUser},
+		{name: "Port", value: values.port, check: ValidatePort},
+		{name: "IdentityFile", value: values.identity, check: ValidateIdentityFile},
+	}
+	for _, validator := range validators {
+		if err := validator.check(validator.value); err != nil {
+			return fmt.Errorf("%s: %w", validator.name, err)
 		}
 	}
 	return nil
+}
+
+func validateTokens(value, allowed string, allowEnvironment bool) error {
+	for index := 0; index < len(value); index++ {
+		switch value[index] {
+		case '%':
+			if index+1 == len(value) || !strings.ContainsRune(allowed, rune(value[index+1])) {
+				return fmt.Errorf("неподдерживаемый токен OpenSSH у символа %d", index+1)
+			}
+			index++
+		case '$':
+			if index+1 >= len(value) || value[index+1] != '{' {
+				continue
+			}
+			if !allowEnvironment {
+				return fmt.Errorf("переменные окружения в этом поле не поддерживаются")
+			}
+			end := strings.IndexByte(value[index+2:], '}')
+			if end < 0 {
+				return fmt.Errorf("переменная окружения должна иметь формат ${NAME}")
+			}
+			name := value[index+2 : index+2+end]
+			if !validEnvironmentName(name) {
+				return fmt.Errorf("некорректное имя переменной окружения в ${%s}", name)
+			}
+			index += end + 2
+		}
+	}
+	return nil
+}
+
+func validEnvironmentName(value string) bool {
+	if value == "" || !isEnvironmentNameStart(value[0]) {
+		return false
+	}
+	for index := 1; index < len(value); index++ {
+		if !isEnvironmentNameStart(value[index]) && (value[index] < '0' || value[index] > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func isEnvironmentNameStart(value byte) bool {
+	return value == '_' || value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
+}
+
+func containsControl(value string) bool {
+	for _, character := range value {
+		if unicode.IsControl(character) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsWhitespaceOrControl(value string) bool {
+	for _, character := range value {
+		if unicode.IsSpace(character) || unicode.IsControl(character) {
+			return true
+		}
+	}
+	return false
 }
 
 func createHostBlock(content string, values sshProfileValues) string {

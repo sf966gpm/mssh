@@ -3,12 +3,15 @@ package ui
 import (
 	"errors"
 	"fmt"
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
-	"github.com/sf966gpm/mssh/app/internal/sshconfig"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/sf966gpm/mssh/app/internal/sshconfig"
 )
 
 type sshAlias struct {
@@ -56,29 +59,30 @@ type sshAliasEdit struct {
 }
 
 type sshOverview struct {
-	window       fyne.Window
-	sshDir       string
-	setStatus    func(string)
-	sshService   *sshconfig.Service
-	configs      []sshConfigFile
-	rows         []sshAliasRow
-	activeConfig int
-	drafts       []sshAliasDraft
-	activeDraft  uint64
-	nextDraftID  uint64
-	edits        map[aliasEditKey]sshAliasEdit
-	loadErr      string
-	list         *widget.List
-	details      *fyne.Container
-	selected     string
-	creating     bool
-	hostName     *widget.Entry
-	alias        *widget.Entry
-	user         *widget.Entry
-	port         *widget.Entry
-	identity     *widget.Entry
-	save         *widget.Button
-	remove       *widget.Button
+	window            fyne.Window
+	sshDir            string
+	setStatus         func(string)
+	sshService        *sshconfig.Service
+	configs           []sshConfigFile
+	rows              []sshAliasRow
+	activeConfig      int
+	drafts            []sshAliasDraft
+	activeDraft       uint64
+	nextDraftID       uint64
+	edits             map[aliasEditKey]sshAliasEdit
+	loadErr           string
+	list              *widget.List
+	details           *fyne.Container
+	selected          string
+	creating          bool
+	hostName          *widget.Entry
+	alias             *widget.Entry
+	user              *widget.Entry
+	port              *widget.Entry
+	identity          *widget.Entry
+	validationBorders map[*widget.Entry]*canvas.Rectangle
+	save              *widget.Button
+	remove            *widget.Button
 }
 
 func newOverview(window fyne.Window, sshDir string, setStatus func(string)) *sshOverview {
