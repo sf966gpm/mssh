@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"path/filepath"
+	"strings"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
-	"strings"
 
 	"github.com/sf966gpm/mssh/app/internal/sshconfig"
 )
@@ -43,6 +46,7 @@ func (o *sshOverview) showAlias(configIndex, index int) {
 	o.user.Enable()
 	o.port.Enable()
 	o.identity.Enable()
+	o.identityPicker.Enable()
 	o.save.Enable()
 	o.remove.Enable()
 	if !alias.editable {
@@ -50,6 +54,7 @@ func (o *sshOverview) showAlias(configIndex, index int) {
 		o.user.Disable()
 		o.port.Disable()
 		o.identity.Disable()
+		o.identityPicker.Disable()
 	}
 	if !alias.hostEditable {
 		o.save.Disable()
@@ -89,7 +94,7 @@ func (o *sshOverview) showAlias(configIndex, index int) {
 		o.formRow("HostName", o.hostName),
 		o.formRow("User", o.user),
 		o.formRow("Port", o.port),
-		o.formRow("IdentityFile", o.identity),
+		o.identityFormRow(),
 	}
 	lines = append(lines, widget.NewSeparator(), container.NewHBox(layout.NewSpacer(), o.remove, o.save))
 	o.details.Objects = []fyne.CanvasObject{container.NewVBox(lines...)}
@@ -102,6 +107,45 @@ func (o *sshOverview) formRow(name string, entry *widget.Entry) fyne.CanvasObjec
 		widget.NewLabelWithStyle(name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		entryRow,
 	)
+}
+
+func (o *sshOverview) identityFormRow() fyne.CanvasObject {
+	return container.NewGridWithColumns(2,
+		widget.NewLabelWithStyle("IdentityFile", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewBorder(nil, nil, nil, o.identityPicker, o.fieldInput("IdentityFile", o.identity)),
+	)
+}
+
+func (o *sshOverview) chooseIdentityFile() {
+	fileDialog := dialog.NewFileOpen(func(file fyne.URIReadCloser, err error) {
+		if err != nil {
+			o.setStatus("Не удалось выбрать файл ключа: " + err.Error())
+			return
+		}
+		if file == nil {
+			return
+		}
+		defer file.Close()
+
+		uri := file.URI()
+		if uri.Scheme() != "file" {
+			o.setStatus("Выберите файл из локальной файловой системы")
+			return
+		}
+		if uri.Authority() != "" && uri.Authority() != "localhost" {
+			o.setStatus("Не удалось определить локальный путь к файлу")
+			return
+		}
+		o.identity.SetText(filepath.FromSlash(uri.Path()))
+	}, o.window)
+	location, err := storage.ListerForURI(storage.NewFileURI(o.sshDir))
+	if err != nil {
+		o.setStatus("Не удалось открыть папку ~/.ssh: " + err.Error())
+		return
+	}
+	fileDialog.SetLocation(location)
+	fileDialog.Resize(fyne.NewSize(1000, 700))
+	fileDialog.Show()
 }
 
 func (o *sshOverview) addAliasToConfig(configIndex int) {
@@ -181,6 +225,7 @@ func (o *sshOverview) resumeDraft(draftID uint64) {
 	o.user.Enable()
 	o.port.Enable()
 	o.identity.Enable()
+	o.identityPicker.Enable()
 	o.remove.Disable()
 	o.save.SetText("Создать подключение")
 	o.save.Enable()
@@ -191,7 +236,7 @@ func (o *sshOverview) resumeDraft(draftID uint64) {
 		o.formRow("HostName", o.hostName),
 		o.formRow("User", o.user),
 		o.formRow("Port", o.port),
-		o.formRow("IdentityFile", o.identity),
+		o.identityFormRow(),
 		widget.NewSeparator(),
 		container.NewHBox(layout.NewSpacer(), o.save),
 	)}

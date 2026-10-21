@@ -15,6 +15,7 @@ func (o *sshOverview) aliasContent() fyne.CanvasObject {
 	o.user = widget.NewEntry()
 	o.port = widget.NewEntry()
 	o.identity = widget.NewEntry()
+	o.identityPicker = widget.NewButtonWithIcon("", theme.FolderOpenIcon(), o.chooseIdentityFile)
 	o.save = widget.NewButton("Сохранить", o.saveAlias)
 	o.remove = widget.NewButton("Удалить", o.confirmDelete)
 	o.save.Disable()

@@ -80,6 +80,7 @@ type sshOverview struct {
 	user              *widget.Entry
 	port              *widget.Entry
 	identity          *widget.Entry
+	identityPicker    *widget.Button
 	validationBorders map[*widget.Entry]*canvas.Rectangle
 	save              *widget.Button
 	remove            *widget.Button
