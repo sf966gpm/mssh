@@ -40,7 +40,10 @@ func hasSimpleHostBlock(source, expanded, alias string) bool {
 	if !hasDirectHostBlock(source, expanded, alias) {
 		return false
 	}
-	start, _, found := hostBlockRange(source, alias)
+	if _, _, found := hostBlockRange(source, alias); !found {
+		return false
+	}
+	start, _, found := hostBlockRange(expanded, alias)
 	if !found {
 		return false
 	}
@@ -48,7 +51,7 @@ func hasSimpleHostBlock(source, expanded, alias string) bool {
 	var patterns []string
 	managed := map[string]struct{}{"hostname": {}, "user": {}, "port": {}, "identityfile": {}}
 	offset := 0
-	for _, line := range strings.SplitAfter(source, "\n") {
+	for _, line := range strings.SplitAfter(expanded, "\n") {
 		if offset >= start {
 			break
 		}
@@ -69,8 +72,6 @@ func hasSimpleHostBlock(source, expanded, alias string) bool {
 		case "match":
 			mode = "match"
 			continue
-		case "include":
-			return false
 		}
 		if _, isManaged := managed[directive]; !isManaged {
 			continue

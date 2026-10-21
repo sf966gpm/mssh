@@ -37,20 +37,14 @@ func newAppShell(application fyne.App, window fyne.Window, mode msshTheme.Mode) 
 		rootDir:     rootDir,
 		statusLabel: widget.NewLabel(""),
 	}
-	e.themeSelect = widget.NewSelect([]string{"Система", "Светлая", "Тёмная"}, e.setThemeMode)
+	e.themeSelect = widget.NewSelect([]string{"Система", "Светлая", "Тёмная", "JetBrains Dark"}, e.setThemeMode)
 	e.themeSelect.SetSelected(themeModeLabel(mode))
 	e.settings = widget.NewButtonWithIcon("", fyneTheme.SettingsIcon(), e.showSettings)
 	return e
 }
 
 func (e *appShell) setThemeMode(label string) {
-	mode := msshTheme.ModeSystem
-	switch label {
-	case "Светлая":
-		mode = msshTheme.ModeLight
-	case "Тёмная":
-		mode = msshTheme.ModeDark
-	}
+	mode := themeModeFromLabel(label)
 	e.application.Preferences().SetString("theme_mode", string(mode))
 	e.application.Settings().SetTheme(msshTheme.NewForMode(mode))
 }
@@ -58,6 +52,19 @@ func (e *appShell) setThemeMode(label string) {
 func (e *appShell) showSettings() {
 	settings := container.NewVBox(widget.NewLabel("Тема оформления"), e.themeSelect)
 	dialog.ShowCustom("Настройки", "Закрыть", settings, e.window)
+}
+
+func themeModeFromLabel(label string) msshTheme.Mode {
+	switch label {
+	case "Светлая":
+		return msshTheme.ModeLight
+	case "Тёмная":
+		return msshTheme.ModeDark
+	case "JetBrains Dark":
+		return msshTheme.ModeJetBrainsDark
+	default:
+		return msshTheme.ModeSystem
+	}
 }
 
 func startDirectory() string {
@@ -74,6 +81,8 @@ func themeModeLabel(mode msshTheme.Mode) string {
 		return "Светлая"
 	case msshTheme.ModeDark:
 		return "Тёмная"
+	case msshTheme.ModeJetBrainsDark:
+		return "JetBrains Dark"
 	default:
 		return "Система"
 	}
